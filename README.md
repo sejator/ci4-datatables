@@ -136,7 +136,9 @@ DEBUG - DataTables SQL: SELECT * FROM users WHERE status = 'pending'
 
 ### 6️⃣ Search Aman (Whitelist Column)
 
-⚠️ Sangat direkomendasikan
+📌 Wajib digunakan jika query menggunakan JOIN atau alias kolom.
+
+Tanpa `searchable()`, DataTables dapat menghasilkan query tidak valid atau fitur pencarian tidak sesuai.
 
 ```php
 ->searchable(['name', 'email'])

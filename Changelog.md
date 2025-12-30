@@ -1,7 +1,58 @@
-## Changelog
+# Changelog
 
-### v1.0.1
+Semua perubahan penting pada library ini akan didokumentasikan di file ini.
 
-- Perbaikan perhitungan `recordsTotal` dan `recordsFiltered`
-- Memperbaiki error pagination pada DataTables server-side
-- Optimalisasi query count untuk data dengan GROUP BY
+---
+
+## v1.0.2
+
+### 🔧 Perbaikan
+
+- Memperbaiki mekanisme **search** agar aman digunakan pada query dengan `JOIN`
+- Memperbaiki **ordering** agar hanya menggunakan kolom yang tervalidasi
+- Mencegah error SQL akibat kolom ambigu pada proses search dan ordering
+- Menyesuaikan prefix tabel secara otomatis pada query join
+
+### 🔐 Keamanan & Stabilitas
+
+- Validasi kolom search dan order menggunakan whitelist
+- Mencegah SQL injection melalui parameter DataTables
+- Mengabaikan request order/search pada kolom yang tidak terdaftar
+
+### ⚙️ Optimalisasi
+
+- Menyederhanakan logika mapping kolom DataTables ke Query Builder
+- Query lebih stabil untuk dataset besar dengan banyak relasi (`JOIN`)
+
+---
+
+## v1.0.1
+
+### 🔧 Perbaikan
+
+- Memperbaiki perhitungan `recordsTotal` dan `recordsFiltered` agar sesuai standar DataTables server-side
+- Memperbaiki bug pagination yang menyebabkan jumlah data tidak konsisten
+- Perbaikan mekanisme counting pada query yang menggunakan `GROUP BY` atau `COUNT DISTINCT`
+- Mencegah error SQL pada query `COUNT` dengan membungkus subquery secara aman
+
+### 🔐 Keamanan & Stabilitas
+
+- Mengamankan proses search dengan whitelist kolom (`searchable()`)
+- Mencegah search dan ordering pada kolom tidak valid atau tanpa prefix tabel
+- Mengurangi ketergantungan terhadap request DataTables dari frontend
+
+### ⚙️ Optimalisasi
+
+- Optimalisasi cloning Query Builder untuk kebutuhan:
+  - Query data
+  - Count total
+  - Count filtered
+- Query lebih konsisten dan stabil untuk penggunaan `JOIN` dan pagination besar
+
+---
+
+## v1.0.0
+
+- Rilis awal CI4 DataTables Helper
+- Mendukung pagination, searching, filtering, dan ordering
+- Dukungan debug SQL dan logging query

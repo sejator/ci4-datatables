@@ -289,14 +289,31 @@ class DataTables
             return;
         }
 
+        if (!empty($this->searchableColumns)) {
+
+            $this->builder->groupStart();
+
+            $first = true;
+            foreach ($this->searchableColumns as $field) {
+                if ($first) {
+                    $this->builder->like($field, $search);
+                    $first = false;
+                } else {
+                    $this->builder->orLike($field, $search);
+                }
+            }
+
+            $this->builder->groupEnd();
+            return;
+        }
+
         $columns = $this->request->getGetPost('columns');
         if (!$columns) {
             return;
         }
 
-        $this->builder->groupStart();
+        $likes = [];
 
-        $first = true;
         foreach ($columns as $col) {
             if (($col['searchable'] ?? 'false') !== 'true') {
                 continue;
@@ -304,21 +321,26 @@ class DataTables
 
             $field = $col['data'];
 
-            if (
-                !empty($this->searchableColumns)
-                && !in_array($field, $this->searchableColumns, true)
-            ) {
+            // skip alias
+            if (!str_contains($field, '.')) {
                 continue;
             }
 
-            if ($first) {
+            $likes[] = $field;
+        }
+
+        if (empty($likes)) {
+            return;
+        }
+
+        $this->builder->groupStart();
+        foreach ($likes as $i => $field) {
+            if ($i === 0) {
                 $this->builder->like($field, $search);
-                $first = false;
             } else {
                 $this->builder->orLike($field, $search);
             }
         }
-
         $this->builder->groupEnd();
     }
 
@@ -331,6 +353,10 @@ class DataTables
 
         $columns = $this->request->getGetPost('columns');
         $field   = $columns[$order['column']]['data'];
+
+        if (!str_contains($field, '.')) {
+            return;
+        }
 
         $this->builder->orderBy($field, $order['dir']);
     }
