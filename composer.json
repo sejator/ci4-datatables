@@ -1,0 +1,33 @@
+{
+  "name": "sejator/ci4-datatables",
+  "description": "Library DataTables server-side untuk CodeIgniter 4",
+  "keywords": [
+    "codeigniter4",
+    "datatables",
+    "datatable",
+    "server-side",
+    "library"
+  ],
+  "type": "library",
+  "license": "MIT",
+  "autoload": {
+    "psr-4": {
+      "Sejator\\DataTables\\": "src/"
+    }
+  },
+  "authors": [
+    {
+      "name": "Sejator",
+      "email": "sejatordev@gmail.com"
+    }
+  ],
+  "require": {
+    "php": ">=7.4",
+    "codeigniter4/framework": "^4.3 || ^4.4 || ^4.5"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^9.5"
+  },
+  "prefer-stable": true,
+  "minimum-stability": "stable"
+}
