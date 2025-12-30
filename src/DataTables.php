@@ -21,6 +21,7 @@ class DataTables
     protected array $editColumns = [];
     protected array $hidden      = [];
     protected array $searchableColumns = [];
+    protected array $orderableColumns = [];
 
     public function __construct()
     {
@@ -121,6 +122,12 @@ class DataTables
         return $this;
     }
 
+    public function orderable(array $columns): self
+    {
+        $this->orderableColumns = $columns;
+        return $this;
+    }
+
     public function countDistinct(string $field): self
     {
         $this->groupCountField = $field;
@@ -160,6 +167,8 @@ class DataTables
         $this->addColumns = [];
         $this->editColumns = [];
         $this->hidden = [];
+        $this->searchableColumns = [];
+        $this->orderableColumns  = [];
         $this->debug = false;
 
         return $this;
@@ -282,64 +291,18 @@ class DataTables
     // =====================================================
     // Helpers
     // =====================================================
+
     protected function applySearch(): void
     {
         $search = $this->request->getGetPost('search')['value'] ?? null;
-        if (!$search) {
-            return;
-        }
+        if (!$search) return;
 
-        if (!empty($this->searchableColumns)) {
-
-            $this->builder->groupStart();
-
-            $first = true;
-            foreach ($this->searchableColumns as $field) {
-                if ($first) {
-                    $this->builder->like($field, $search);
-                    $first = false;
-                } else {
-                    $this->builder->orLike($field, $search);
-                }
-            }
-
-            $this->builder->groupEnd();
-            return;
-        }
-
-        $columns = $this->request->getGetPost('columns');
-        if (!$columns) {
-            return;
-        }
-
-        $likes = [];
-
-        foreach ($columns as $col) {
-            if (($col['searchable'] ?? 'false') !== 'true') {
-                continue;
-            }
-
-            $field = $col['data'];
-
-            // skip alias
-            if (!str_contains($field, '.')) {
-                continue;
-            }
-
-            $likes[] = $field;
-        }
-
-        if (empty($likes)) {
-            return;
-        }
+        if (empty($this->searchableColumns)) return;
 
         $this->builder->groupStart();
-        foreach ($likes as $i => $field) {
-            if ($i === 0) {
-                $this->builder->like($field, $search);
-            } else {
-                $this->builder->orLike($field, $search);
-            }
+        foreach ($this->searchableColumns as $i => $field) {
+            if ($i === 0) $this->builder->like($field, $search);
+            else $this->builder->orLike($field, $search);
         }
         $this->builder->groupEnd();
     }
@@ -352,23 +315,21 @@ class DataTables
         if (!$order) return;
 
         $columns = $this->request->getGetPost('columns');
-        $field   = $columns[$order['column']]['data'];
+        $field   = $columns[$order['column']]['data'] ?? null;
+
+        if (!$field) return;
+
+        if (!in_array($field, $this->orderableColumns, true)) {
+            return;
+        }
 
         if (!str_contains($field, '.')) {
             return;
         }
 
-        $this->builder->orderBy($field, $order['dir']);
-    }
+        $dir = strtolower($order['dir']) === 'desc' ? 'DESC' : 'ASC';
 
-    protected function applyLimit(): void
-    {
-        $length = (int) $this->request->getGetPost('length');
-        $start  = (int) $this->request->getGetPost('start');
-
-        if ($length > 0) {
-            $this->builder->limit($length, $start);
-        }
+        $this->builder->orderBy($field, $dir);
     }
 
     protected function transform(array $rows): array
