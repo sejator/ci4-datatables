@@ -22,6 +22,7 @@ class DataTables
     protected array $hidden      = [];
     protected array $searchableColumns = [];
     protected array $orderableColumns = [];
+    protected array $likeConditions = [];
 
     public function __construct()
     {
@@ -100,6 +101,33 @@ class DataTables
         if (!empty($value)) {
             $callback($this, $value);
         }
+        return $this;
+    }
+
+    public function like(string $column, string $value, string $position = 'both'): self
+    {
+        if ($value === '' || $value === null) {
+            return $this;
+        }
+
+        $this->likeConditions[] = [
+            'column'   => $column,
+            'value'    => $value,
+            'position' => $position,
+        ];
+
+        if (preg_match('/\(|\)/', $column)) {
+            $likeValue = match ($position) {
+                'before' => "%{$value}",
+                'after'  => "{$value}%",
+                default  => "%{$value}%"
+            };
+
+            $this->builder->where("{$column} LIKE '{$likeValue}'", null, false);
+        } else {
+            $this->builder->like($column, $value, $position);
+        }
+
         return $this;
     }
 
