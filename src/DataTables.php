@@ -37,8 +37,6 @@ class DataTables
         $this->db = Database::connect();
         $this->builder = $this->db->table($table);
 
-        $this->baseBuilder = clone $this->builder;
-
         return $this;
     }
 
@@ -221,41 +219,40 @@ class DataTables
      ===================================================== */
     public function make()
     {
+        $this->baseBuilder = clone $this->builder;
+
         $this->applySearch();
         $this->applyOrdering();
+
+        $dataBuilder = clone $this->builder;
 
         // DEBUG MODE
         if ($this->debug) {
             return Services::response()->setJSON([
                 'debug' => true,
                 'queries' => [
-                    'data' => $this->toSql(),
+                    'data' => $this->debugSql(clone $dataBuilder),
                     'count_all' => $this->debugSql(
-                        $this->prepareCountBuilder(clone $this->baseBuilder)
+                        clone $this->baseBuilder
                     ),
                     'count_filtered' => $this->debugSql(
-                        $this->prepareCountBuilder(clone $this->builder)
+                        clone $this->builder
                     ),
                 ]
             ]);
         }
 
-        $recordsTotal    = $this->countAll();
-        $recordsFiltered = $this->countFiltered();
+        $recordsTotal    = $this->countBuilder(clone $this->baseBuilder);
+        $recordsFiltered = $this->countBuilder(clone $this->builder);
 
+        $length = (int) $this->request->getGetPost('length');
         $start  = (int) $this->request->getGetPost('start');
-        // $length = (int) $this->request->getGetPost('length');
 
-        if ($recordsFiltered === 0 && $start > 0) {
-            $this->request->setGlobal('get', array_merge(
-                $this->request->getGet(),
-                ['start' => 0]
-            ));
+        if ($length > 0) {
+            $dataBuilder->limit($length, $start);
         }
 
-        $this->applyLimit();
-
-        $data = $this->builder->get()->getResultArray();
+        $data = $dataBuilder->get()->getResultArray();
         $data = $this->transform($data);
 
         return Services::response()->setJSON([
@@ -373,45 +370,34 @@ class DataTables
         return clone $this->builder;
     }
 
-    protected function prepareCountBuilder($builder)
-    {
-        $builder->resetQuery(['orderBy', 'limit']);
-
-        return $builder;
-    }
-
     protected function countAll(): int
     {
-        $builder = clone $this->baseBuilder;
-        $builder = $this->prepareCountBuilder($builder);
-
-        if ($this->groupCountField) {
-            $builder->select(
-                "COUNT(DISTINCT {$this->groupCountField}) AS total",
-                false
-            );
-
-            return (int) $builder->get()->getRow()->total;
-        }
-
-        return (int) $builder->countAllResults();
+        return $this->countBuilder(clone $this->baseBuilder);
     }
 
     protected function countFiltered(): int
     {
-        $builder = clone $this->builder;
-        $builder = $this->prepareCountBuilder($builder);
+        return $this->countBuilder(clone $this->builder);
+    }
 
-        if ($this->groupCountField) {
-            $builder->select(
-                "COUNT(DISTINCT {$this->groupCountField}) AS total",
-                false
+    protected function countBuilder($builder): int
+    {
+        $countBuilder = clone $builder;
+
+        $sql = $countBuilder->getCompiledSelect(false);
+
+        if (
+            $this->groupCountField ||
+            stripos($sql, 'GROUP BY') !== false
+        ) {
+            $query = $this->db->query(
+                "SELECT COUNT(*) AS total FROM ({$sql}) AS t"
             );
 
-            return (int) $builder->get()->getRow()->total;
+            return (int) $query->getRow()->total;
         }
 
-        return (int) $builder->countAllResults();
+        return (int) $countBuilder->countAllResults(false);
     }
 
     protected function getDebugQuery(): array
@@ -429,9 +415,26 @@ class DataTables
         $binds = $builder->getBinds();
 
         foreach ($binds as $bind) {
-            $value = is_numeric($bind)
-                ? $bind
-                : ($bind === null ? 'NULL' : "'" . str_replace("'", "''", $bind) . "'");
+
+            if (is_array($bind)) {
+                $values = array_map(function ($item) {
+                    if (is_numeric($item)) {
+                        return $item;
+                    }
+                    if ($item === null) {
+                        return 'NULL';
+                    }
+                    return "'" . str_replace("'", "''", $item) . "'";
+                }, $bind);
+
+                $value = '(' . implode(', ', $values) . ')';
+            } elseif (is_numeric($bind)) {
+                $value = $bind;
+            } elseif ($bind === null) {
+                $value = 'NULL';
+            } else {
+                $value = "'" . str_replace("'", "''", $bind) . "'";
+            }
 
             $sql = preg_replace('/\?/', $value, $sql, 1);
         }
