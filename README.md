@@ -156,18 +156,19 @@ Tanpa `searchable()`, DataTables dapat menghasilkan query tidak valid atau fitur
 
 ### 7️⃣ Ringkasan Method Penting
 
-| Method              | Fungsi                 |
-| ------------------- | ---------------------- |
-| `from($table)`      | Tentukan tabel         |
-| `select()`          | Kolom yang diambil     |
-| `where()`           | Filter data            |
-| `when()`            | Filter kondisional     |
-| `searchable()`      | Whitelist kolom search |
-| `orderBy()`         | Sorting manual         |
-| `debug()`           | Tampilkan SQL lengkap  |
-| `ddSql()`           | Dump SQL & stop        |
-| `logSql()`          | Log SQL ke CI4         |
-| `make()` / `draw()` | Eksekusi DataTables    |
+| Method              | Fungsi                                 |
+| ------------------- | -------------------------------------- |
+| `from($table)`      | Tentukan tabel                         |
+| `select()`          | Kolom yang diambil                     |
+| `where()`           | Filter data                            |
+| `when()`            | Filter kondisional                     |
+| `searchable()`      | Whitelist kolom search                 |
+| `orderBy()`         | Sorting manual                         |
+| `debug()`           | Tampilkan SQL lengkap                  |
+| `ddSql()`           | Dump SQL & stop                        |
+| `logSql()`          | Log SQL ke CI4                         |
+| `make()` / `draw()` | Eksekusi DataTables                    |
+| `withRelation()`    | Load relasi tanpa JOIN (lazy & nested) |
 
 📌 `make()` dan `draw()` setara (pilih salah satu untuk konsistensi)
 
@@ -186,3 +187,117 @@ $dt->reset()
    ->where('status', 'inactive')
    ->make();
 ```
+
+### 8️⃣ Relasi Data (withRelation)
+
+Fitur `withRelation()` digunakan untuk memuat data relasi tanpa JOIN, sehingga:
+
+✅ Aman untuk pagination
+✅ Tidak menduplikasi row
+✅ Performa lebih baik
+✅ Cocok untuk server-side DataTables
+
+Relasi akan dimuat setelah query utama dieksekusi dan disisipkan ke setiap row hasil.
+
+#### 8.1️⃣ Penggunaan Dasar
+
+```php
+return DataTables::from('izin')
+    ->select('id, tanggal_mulai, status')
+    ->withRelation(
+        'izin_id',     // foreign key di tabel relasi
+        'id',          // primary key di tabel utama
+        'izin_histori',
+        'izin_id, tanggal'
+    )
+    ->make();
+```
+
+Hasil data:
+
+```php
+$row['izin_histori'] = [
+    ['izin_id' => 1, 'tanggal' => '2024-01-01'],
+    ['izin_id' => 1, 'tanggal' => '2024-01-02'],
+];
+```
+
+#### 8.2️⃣ Lazy Load Relasi (Direkomendasikan)
+
+Relasi hanya akan di-load jika benar-benar digunakan pada addColumn() atau editColumn().
+
+```php
+return DataTables::from('izin')
+    ->select('id, status')
+    ->withRelation(
+        'izin_id',
+        'id',
+        'izin_histori',
+        'izin_id, tanggal',
+        [
+            'onlyIfUsedIn' => ['tanggal']
+        ]
+    )
+    ->addColumn('tanggal', function ($row) {
+        return implode(
+            ', ',
+            array_column($row->izin_histori, 'tanggal')
+        );
+    })
+    ->make();
+```
+
+📌 Jika kolom `tanggal` tidak dipakai, query relasi tidak akan dijalankan.
+
+#### 8.3️⃣ Nested Relation (Relasi Bertingkat)
+
+Mendukung relasi di dalam relasi.
+
+```php
+return DataTables::from('izin')
+    ->select('id, status')
+    ->withRelation(
+        'izin_id',
+        'id',
+        'izin_histori',
+        'id, izin_id, tanggal',
+        [
+            'nested' => [
+                [
+                    'foreignKey' => 'izin_histori_id',
+                    'localKey'   => 'id',
+                    'table'      => 'izin_histori_detail',
+                    'columns'    => '*',
+                ]
+            ]
+        ]
+    )
+    ->make();
+```
+
+Akses data:
+
+```php
+$row->izin_histori[0]['izin_histori_detail']
+```
+
+#### 8.4️⃣ Kenapa withRelation Tidak Menggunakan JOIN?
+
+❌ JOIN menyebabkan:
+
+- Duplikasi row
+- Pagination tidak akurat
+- Count total & filtered salah
+
+✅ withRelation:
+
+- Query utama tetap bersih
+- Relasi di-load sekali (no N+1)
+- Aman untuk DataTables server-side
+
+#### 8.5️⃣ Rekomendasi Best Practice
+
+- ✔ Gunakan withRelation() untuk data child (histori, detail, log)
+- ✔ Aktifkan onlyIfUsedIn untuk performa optimal
+- ✔ Gunakan JOIN hanya untuk data 1–1 yang memang ditampilkan langsung
+- ✔ Hindari JOIN untuk data 1–N pada DataTables

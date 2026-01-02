@@ -4,6 +4,34 @@ Semua perubahan penting pada library ini akan didokumentasikan di file ini.
 
 ---
 
+## v1.0.4
+
+### ✨ Fitur Baru
+
+- Menambahkan method **`withRelation()`** untuk memuat relasi data tanpa menggunakan `JOIN`
+- Mendukung **lazy-loading relasi**, relasi hanya di-load jika kolom terkait digunakan
+- Mendukung **nested relation (relasi bertingkat)** untuk kebutuhan data kompleks
+- Relasi dimuat setelah query utama sehingga aman untuk pagination server-side DataTables
+
+### ⚙️ Performa & Arsitektur
+
+- Menghindari duplikasi row akibat `JOIN` pada relasi 1–N
+- Menghilangkan risiko error pagination dan count pada query relasional
+- Menggunakan 1 query utama + 1 query relasi (tanpa N+1 query)
+- Optimasi beban query dengan opsi `onlyIfUsedIn`
+
+### 🔐 Stabilitas & Kompatibilitas
+
+- 100% **backward compatible** dengan kode DataTables existing
+- Tidak memengaruhi mekanisme:
+  - Pagination
+  - Searching
+  - Ordering
+  - Count total & filtered
+- Aman digunakan bersamaan dengan fitur `searchable()` dan `orderable()`
+
+---
+
 ## v1.0.2
 
 ### 🔧 Perbaikan
