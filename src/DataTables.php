@@ -23,6 +23,7 @@ class DataTables
     protected array $searchableColumns = [];
     protected array $orderableColumns = [];
     protected array $likeConditions = [];
+    protected array $relations = [];
 
     public function __construct()
     {
@@ -134,6 +135,25 @@ class DataTables
     public function join(string $table, string $cond, string $type = ''): self
     {
         $this->builder->join($table, $cond, $type);
+        return $this;
+    }
+
+    public function withRelation(
+        string $foreignKey,
+        string $localKey,
+        string $table,
+        string $columns = '*',
+        array $options = []
+    ): self {
+        $this->relations[] = array_merge([
+            'foreignKey'   => $foreignKey,
+            'localKey'     => $localKey,
+            'table'        => $table,
+            'columns'      => $columns,
+            'nested'       => [],
+            'onlyIfUsedIn' => null,
+        ], $options);
+
         return $this;
     }
 
@@ -290,6 +310,11 @@ class DataTables
         }
 
         $data = $dataBuilder->get()->getResultArray();
+
+        if (!empty($this->relations)) {
+            $data = $this->loadRelations($data);
+        }
+
         $data = $this->transform($data);
 
         return Services::response()->setJSON([
@@ -455,5 +480,79 @@ class DataTables
         }
 
         return $sql;
+    }
+
+    protected function isRelationNeeded(array $relation): bool
+    {
+        if (empty($relation['onlyIfUsedIn'])) {
+            return true;
+        }
+
+        $usedColumns = array_merge(
+            array_keys($this->addColumns),
+            array_keys($this->editColumns)
+        );
+
+        foreach ($relation['onlyIfUsedIn'] as $col) {
+            if (in_array($col, $usedColumns, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected function loadRelations(array $rows): array
+    {
+        if (empty($rows)) return $rows;
+
+        foreach ($this->relations as $relation) {
+
+            if (!$this->isRelationNeeded($relation)) {
+                continue;
+            }
+
+            $rows = $this->loadSingleRelation($rows, $relation);
+        }
+
+        return $rows;
+    }
+
+    protected function loadSingleRelation(array $rows, array $relation): array
+    {
+        $localKey   = $relation['localKey'];
+        $foreignKey = $relation['foreignKey'];
+        $table      = $relation['table'];
+        $columns    = $relation['columns'];
+        $nested     = $relation['nested'];
+
+        $ids = array_unique(array_filter(array_column($rows, $localKey)));
+        if (empty($ids)) return $rows;
+
+        $related = $this->db->table($table)
+            ->select($columns)
+            ->whereIn($foreignKey, $ids)
+            ->get()
+            ->getResultArray();
+
+        if (!empty($nested)) {
+            foreach ($nested as $nestedRelation) {
+                $related = $this->loadSingleRelation(
+                    $related,
+                    $nestedRelation
+                );
+            }
+        }
+
+        $grouped = [];
+        foreach ($related as $rel) {
+            $grouped[$rel[$foreignKey]][] = $rel;
+        }
+
+        foreach ($rows as &$row) {
+            $row[$table] = $grouped[$row[$localKey]] ?? [];
+        }
+
+        return $rows;
     }
 }
